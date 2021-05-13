@@ -26,6 +26,7 @@ struct Sphere {
     Vec3 Center;
     double Radius;
     pix Color;
+    double Specular;
 };
 
 struct Light {
@@ -36,8 +37,8 @@ struct Light {
 
 
 const double inf = 9e18;
-double viewportHeight=1, viewportWidth=1;
-double canvasHeight=600, canvasWidth=600;
+double viewportHeight=1, viewportWidth=1.7;
+double canvasHeight=600, canvasWidth=1000;
 double ViewDist = 1;
 
 void CanvasToViewport(Vec3 &D) {
@@ -57,7 +58,7 @@ void readSpheresFromFile(vector<Sphere> &ar) {
     ifstream fio("data.txt", ios::in);
 
     Vec3 Center;
-    double Radius;
+    double Radius, Specular;
     pix Color;
     int R,G,B;
 
@@ -65,21 +66,26 @@ void readSpheresFromFile(vector<Sphere> &ar) {
         fio >> Center.x >> Center.y >> Center.z;
         fio >> Radius;
         fio >> R >> G >> B;
+        fio >> Specular;
         Color = {(uint8_t)R,(uint8_t)G,(uint8_t)B};
-        Sphere S = {Center, Radius, Color};
+        Sphere S = {Center, Radius, Color, Specular};
         ar.push_back(S);
     }
+    ar.pop_back();
     fio.close();
 }
 
-vector<Light> lights = { {0,0.2,{0,0,0}}, {1,0.6,{-1,5,0}}, {2, 0.2, {1,4,4}} };
+vector<Light> lights = { {0,0.2,{0,0,0}}, {1,0.6,{2,1,0}}, {2, 0.2, {1,4,4}} };
+
 double ComputeShade(double t, Sphere &S, Vec3 &D) {
     Vec3 P = D*t;
     Vec3 N = P - S.Center;
     N /= abs(N);
     double i = 0.0;
+    Vec3 Origin = {0,0,0};
 
     for(Light light: lights) {
+
         if(light.type == LIGHT_AMBIENT) {
             i += light.intensity;
         }
@@ -88,9 +94,18 @@ double ComputeShade(double t, Sphere &S, Vec3 &D) {
             if(light.type == LIGHT_POINT) {
                 L -= P;
             }
+
             double CosineofNL = Dot(L,N)/abs(L);
             if(CosineofNL > 0) {
-                i += light.intensity*CosineofNL;
+                i += light.intensity*(CosineofNL);
+            }
+
+            Vec3 R = N*(Dot(L,N)*2); R -= L;
+            Vec3 V = Origin - P;
+            double CosineofRV = Dot(R,V)/(abs(R)*abs(V));
+            if(CosineofRV > 0.0) {
+                i += pow(CosineofRV, S.Specular) * light.intensity;
+                if(i>1) i = 1;
             }
         }
     }
@@ -98,7 +113,9 @@ double ComputeShade(double t, Sphere &S, Vec3 &D) {
 }
 
 void FindClosestSphere(vector<Sphere> spheres, pix &ClosestColor, Vec3& D) {
+    
     double ClosestIntersection = inf;
+    Sphere ClosestSphere;
 
     for(auto S: spheres) {
 
@@ -113,22 +130,26 @@ void FindClosestSphere(vector<Sphere> spheres, pix &ClosestColor, Vec3& D) {
         if(sol1 >= 1.0 && sol1 < inf) {
             if(ClosestIntersection > sol1) {
                 ClosestIntersection = sol1;
-                ClosestColor = S.Color * ComputeShade(sol1, S, D);
+                ClosestSphere = S;
             }
         }
 
         if(sol2 >= 1.0 && sol2 < inf) {
             if(ClosestIntersection > sol2) {
                 ClosestIntersection = sol2;
-                ClosestColor = S.Color * ComputeShade(sol2, S, D);
+                ClosestSphere = S;
             }
         }
+    }
+    if(ClosestIntersection != inf) {
+        double shade = ComputeShade(ClosestIntersection, ClosestSphere, D);
+        ClosestColor = ClosestSphere.Color * shade;
     }
 }
 
 int main() {
     
-    Image img("img.bmp", canvasHeight, canvasWidth);
+    Image img("img.bmp", canvasHeight, canvasWidth, 255, 255, 255);
 
     vector<Sphere> spheres;
     readSpheresFromFile(spheres);
@@ -145,7 +166,8 @@ int main() {
 
             int X = j + canvasWidth/2;
             int Y = i + canvasHeight/2;
-            img.SetPixel(Y, X, ClosestColor.r, ClosestColor.g, ClosestColor.b);
+
+            img.SetPixel(X, Y, ClosestColor.r, ClosestColor.g, ClosestColor.b);
         }
     }
 

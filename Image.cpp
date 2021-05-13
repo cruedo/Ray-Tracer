@@ -18,7 +18,7 @@ Image::Image(string name, int H, int W, uint8_t r, uint8_t g, uint8_t b) {
 
 void Image::SetPixel(int x, int y, uint8_t r, uint8_t g, uint8_t b) {
     if(0<=x && x<width && 0<=y && y<height)
-        img[x][y] = {r,g,b};
+        img[y][x] = {r,g,b};
 }
 
 void Image::clear(uint8_t red, uint8_t green, uint8_t blue) {
